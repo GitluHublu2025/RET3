@@ -370,5 +370,49 @@ df_sim, spikes, dec_df, dec_summary = simulate(
     total_principal, weighted_rate, exp_df,
     start_age=start_age, end_age=end_age,
     monthly_inflation=monthly_inflation,
+    start_calendar_year=start_calendar_year
+)
 
+st.write("### Simulation snapshot (first 12 rows)")
+st.dataframe(df_sim.head(12))
+
+# Interactive Plotly chart (monthly)
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['monthly_expenditure'], mode='lines', name='Monthly Expenditure'))
+fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['monthly_income'], mode='lines', name='Monthly Income'))
+fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['corpus'], mode='lines', name='Cumulative Corpus'))
+if show_spikes:
+    spike_dates = [d for d in sorted(spikes.keys()) if d.month==12 and spikes[d]]
+    spike_vals = [df_sim.loc[df_sim['date']==d,'monthly_expenditure'].values[0] for d in spike_dates]
+    fig.add_trace(go.Scatter(
+        x=spike_dates, y=spike_vals, mode='markers+text', name='December spikes',
+        text=[f"{v:,.0f}" for v in spike_vals], textposition="top center"
+    ))
+fig.update_layout(
+    title=f'Age {start_age} → {end_age} : Monthly Expenditure, Income, Cumulative Corpus (v5)',
+    yaxis_title='INR', hovermode='x unified'
+)
+st.plotly_chart(fig, use_container_width=True)
+
+st.subheader("December itemized calendar view (INR)")
+if dec_df.empty:
+    st.write("No December lump-sum expenditures detected in simulation range.")
+else:
+    st.write("Itemized December expenditures (each row = a payment in December)")
+    st.dataframe(dec_df)
+    st.write("December totals by year")
+    st.dataframe(dec_summary)
+
+# Provide download buttons for CSVs
+csv_buf = io.StringIO()
+df_sim.to_csv(csv_buf, index=False)
+st.download_button("Download full monthly simulation CSV", data=csv_buf.getvalue(), file_name="simulation_results_v5.csv", mime="text/csv")
+
+csv_buf2 = io.StringIO()
+dec_df.to_csv(csv_buf2, index=False)
+st.download_button("Download itemized December spikes CSV", data=csv_buf2.getvalue(), file_name="december_spikes_v5.csv", mime="text/csv")
+
+csv_buf3 = io.StringIO()
+dec_summary.to_csv(csv_buf3, index=False)
+st.download_button("Download December totals summary CSV", data=csv_buf3.getvalue(), file_name="december_spikes_summary_v5.csv", mime="text/csv")
 
