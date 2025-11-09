@@ -10,12 +10,8 @@ st.title("Retirement Corpus Simulator — v5 (Grouped BASIS sidebar)")
 DEFAULT_USD_TO_INR = 88.0
 
 uploaded = st.file_uploader("Upload Excel (or leave blank to use included sample)", type=["xlsx"])
-default_path = "/mnt/data/Retirement_Calc.xlsx"
-xlsx_path = None
-if uploaded is not None:
-    xlsx_path = uploaded
-else:
-    xlsx_path = default_path
+default_path = "Retirement_Calc.xlsx"
+xlsx_path = uploaded if uploaded is not None else default_path
 
 @st.cache_data
 def load_excel(path):
@@ -65,7 +61,6 @@ def group_param_name(name):
     return '🌐 General Parameters'
 
 def create_sidebar_controls(params):
-    # returns dict of param name -> value (user chosen)
     grouped = {}
     for name, val, desc in params:
         grp = group_param_name(name)
@@ -93,7 +88,6 @@ def create_sidebar_controls(params):
     return user_values
 
 def parse_basis_for_internal(vars_dict):
-    """Extract some commonly used fields from the user-provided BASIS params dict"""
     usd_to_inr = None
     inflation = None
     for k,v in vars_dict.items():
@@ -114,7 +108,6 @@ def parse_basis_for_internal(vars_dict):
     return usd_to_inr, inflation
 
 def parse_basis_map(df):
-    # map instrument name -> return % if present in basis sheet
     basis_map = {}
     if df is None or df.empty:
         return basis_map
@@ -329,9 +322,7 @@ def simulate(inv_total, annual_rate, exp_df, start_age=52, end_age=80, monthly_i
 
 # Read BASIS parameters
 basis_params = read_basis_params(sheets.get('BASIS', pd.DataFrame()))
-# create sidebar controls grouped
 user_basis = create_sidebar_controls(basis_params)
-# derive usd->inr and inflation defaults from sidebar params if present
 usd_to_inr, inflation_from_basis = parse_basis_for_internal(user_basis)
 if usd_to_inr is None:
     usd_to_inr = user_basis.get('USD to INR', user_basis.get('USD→INR', user_basis.get('USD->INR', DEFAULT_USD_TO_INR)))
@@ -340,7 +331,6 @@ try:
 except:
     usd_to_inr = DEFAULT_USD_TO_INR
 if inflation_from_basis is None:
-    # try to find keys with 'inflation' in name and take first numeric
     inflation_from_basis = None
     for k,v in user_basis.items():
         if 'inflation' in k.lower():
@@ -349,10 +339,8 @@ if inflation_from_basis is None:
                 break
             except:
                 continue
-# if still none, leave None and allow sidebar numeric later
 if inflation_from_basis is not None:
     st.sidebar.markdown(f"**Inflation (annual)** read from BASIS inputs: {inflation_from_basis*100:.2f}%")
-# parse basis map for instrument returns
 basis_map = parse_basis_map(sheets.get('BASIS', pd.DataFrame()))
 inv_df, total_principal, weighted_rate = parse_investments(sheets.get('INVESTMENT', pd.DataFrame()), basis_map, usd_to_inr)
 exp_df, recurring_monthly_total = parse_expenditure(sheets.get('EXPENDITURE', pd.DataFrame()), usd_to_inr)
@@ -370,19 +358,17 @@ st.dataframe(exp_df)
 st.sidebar.header("Simulation parameters (v5)")
 start_age = st.sidebar.number_input("Start age (years)", value=52, min_value=18, max_value=120)
 end_age = st.sidebar.number_input("End age (years)", value=80, min_value=start_age, max_value=120)
-# If inflation_from_basis present, use it; else provide sidebar numeric input as percent
 if inflation_from_basis is not None:
     annual_infl = inflation_from_basis
 else:
+    annual_infl = st.sidebar.number_input("Annual inflation (%)", value=0.0, step=0.1)/100.0
+monthly_inflation = (1+annual_infl)**(1/12.0)-1.0
+start_calendar_year = st.sidebar.number_input("Simulation start calendar year (e.g. 2026)", value=2025, step=1)
+show_spikes = st.sidebar.checkbox("Highlight December spikes on plot", value=True)
 
-
-
-
-
-
-
-
-
-
+df_sim, spikes, dec_df, dec_summary = simulate(
+    total_principal, weighted_rate, exp_df,
+    start_age=start_age, end_age=end_age,
+    monthly_inflation=monthly_inflation,
 
 
