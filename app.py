@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,7 +7,6 @@ import plotly.graph_objects as go
 st.set_page_config(layout="wide", page_title="Retirement Corpus Simulator (v5)")
 st.title("Retirement Corpus Simulator — v5 (Grouped BASIS sidebar)")
 
-# Default USD->INR in case BASIS doesn't provide it
 DEFAULT_USD_TO_INR = 88.0
 
 uploaded = st.file_uploader("Upload Excel (or leave blank to use included sample)", type=["xlsx"])
@@ -26,6 +24,7 @@ def load_excel(path):
     return sheets
 
 sheets = load_excel(xlsx_path)
+
 st.sidebar.header("Sheets detected")
 for s in sheets:
     st.sidebar.write(f"- {s} ({sheets[s].shape[0]} rows x {sheets[s].shape[1]} cols)")
@@ -36,10 +35,10 @@ def norm_cols(df):
     return dfc
 
 def read_basis_params(df):
-    """"
+    """
     Expect BASIS sheet with first column=Parameter, second column=Value, optional third=Description.
     Returns ordered list of (param, value, description)
-    """"
+    """
     params = []
     if df is None or df.empty:
         return params
@@ -77,7 +76,6 @@ def create_sidebar_controls(params):
             for (name, val, desc) in grouped[grp]:
                 label = name
                 help_txt = desc if desc else None
-                # try numeric
                 numeric = None
                 if val is None or (isinstance(val, str) and val.strip()==""):
                     numeric = None
@@ -87,7 +85,6 @@ def create_sidebar_controls(params):
                     except:
                         numeric = None
                 if numeric is not None:
-                    # if value looks like percent in 0-100, use number_input with percent display
                     user_val = st.number_input(label, value=float(numeric), help=help_txt, step=0.1, format="%.4f")
                     user_values[name] = user_val
                 else:
@@ -99,7 +96,6 @@ def parse_basis_for_internal(vars_dict):
     """Extract some commonly used fields from the user-provided BASIS params dict"""
     usd_to_inr = None
     inflation = None
-    # common keys to search
     for k,v in vars_dict.items():
         lk = k.lower()
         if ('usd' in lk or 'exchange' in lk or 'dollar' in lk) and ('inr' in lk or 'to' in lk):
@@ -107,11 +103,10 @@ def parse_basis_for_internal(vars_dict):
                 usd_to_inr = float(v)
             except:
                 pass
-        if 'usd to inr' in lk or 'usd->inr' in lk or 'usd to inr' in lk:
+        if 'usd to inr' in lk or 'usd→inr' in lk or 'usd->inr' in lk:
             try: usd_to_inr = float(v)
             except: pass
         if 'inflation' == lk or 'inflation (%)' in lk.lower() or 'inflation' in lk:
-            # prefer Indian inflation if exact
             try:
                 inflation = float(v)
             except:
@@ -184,8 +179,8 @@ def parse_investments(df, basis_map, usd_to_inr):
                 rate = None
         if currency_col and pd.notna(r.get(currency_col)):
             currency = str(r.get(currency_col)).strip().upper()
-            if currency == 'USD' and usd_to_inr is not None:
-                principal = principal * usd_to_inr
+        if currency == 'USD' and usd_to_inr is not None:
+            principal = principal * usd_to_inr
         rate_from_basis = None
         if isinstance(name, str):
             for k in basis_map:
@@ -274,7 +269,7 @@ def parse_expenditure(df, usd_to_inr):
             monthly_amt += conv_amount(other_numeric)
         if monthly_amt>0:
             rows.append({'item': str(item).strip(), 'type':'monthly', 'amount': monthly_amt, 'year': None, 'currency': currency})
-            recurring_monthly_total += monthly_amt
+        recurring_monthly_total += monthly_amt
     exp_df = pd.DataFrame(rows)
     return exp_df, recurring_monthly_total
 
@@ -336,7 +331,6 @@ def simulate(inv_total, annual_rate, exp_df, start_age=52, end_age=80, monthly_i
 basis_params = read_basis_params(sheets.get('BASIS', pd.DataFrame()))
 # create sidebar controls grouped
 user_basis = create_sidebar_controls(basis_params)
-
 # derive usd->inr and inflation defaults from sidebar params if present
 usd_to_inr, inflation_from_basis = parse_basis_for_internal(user_basis)
 if usd_to_inr is None:
@@ -345,7 +339,6 @@ try:
     usd_to_inr = float(usd_to_inr)
 except:
     usd_to_inr = DEFAULT_USD_TO_INR
-
 if inflation_from_basis is None:
     # try to find keys with 'inflation' in name and take first numeric
     inflation_from_basis = None
@@ -359,7 +352,6 @@ if inflation_from_basis is None:
 # if still none, leave None and allow sidebar numeric later
 if inflation_from_basis is not None:
     st.sidebar.markdown(f"**Inflation (annual)** read from BASIS inputs: {inflation_from_basis*100:.2f}%")
-
 # parse basis map for instrument returns
 basis_map = parse_basis_map(sheets.get('BASIS', pd.DataFrame()))
 inv_df, total_principal, weighted_rate = parse_investments(sheets.get('INVESTMENT', pd.DataFrame()), basis_map, usd_to_inr)
@@ -370,7 +362,6 @@ st.markdown(f"- All values shown in INR (USD->INR = {usd_to_inr:.2f})")
 st.markdown(f"- Total starting corpus (INR) = **{total_principal:,.2f}**")
 st.markdown(f"- Weighted annual rate = **{weighted_rate*100:.2f}%**")
 st.markdown(f"- Parsed recurring monthly total (INR) = **{recurring_monthly_total:,.2f}**")
-
 st.write("### Parsed INVESTMENTS")
 st.dataframe(inv_df)
 st.write("### Parsed EXPENDITURE (rows)")
@@ -379,56 +370,19 @@ st.dataframe(exp_df)
 st.sidebar.header("Simulation parameters (v5)")
 start_age = st.sidebar.number_input("Start age (years)", value=52, min_value=18, max_value=120)
 end_age = st.sidebar.number_input("End age (years)", value=80, min_value=start_age, max_value=120)
-
 # If inflation_from_basis present, use it; else provide sidebar numeric input as percent
 if inflation_from_basis is not None:
     annual_infl = inflation_from_basis
 else:
-    annual_infl = st.sidebar.number_input("Annual inflation (%)", value=0.0, step=0.1)/100.0
-monthly_inflation = (1+annual_infl)**(1/12.0)-1.0
 
-start_calendar_year = st.sidebar.number_input("Simulation start calendar year (e.g. 2026)", value=2025, step=1)
-show_spikes = st.sidebar.checkbox("Highlight December spikes on plot", value=True)
 
-df_sim, spikes, dec_df, dec_summary = simulate(total_principal, weighted_rate, exp_df, start_age=start_age, end_age=end_age, monthly_inflation=monthly_inflation, start_calendar_year=start_calendar_year)
 
-st.write("### Simulation snapshot (first 12 rows)")
-st.dataframe(df_sim.head(12))
 
-# Interactive Plotly chart (monthly)
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['monthly_expenditure'], mode='lines', name='Monthly Expenditure'))
-fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['monthly_income'], mode='lines', name='Monthly Income'))
-fig.add_trace(go.Scatter(x=df_sim['date'], y=df_sim['corpus'], mode='lines', name='Cumulative Corpus'))
 
-if show_spikes:
-    spike_dates = [d for d in sorted(spikes.keys()) if d.month==12 and spikes[d]]
-    spike_vals = [df_sim.loc[df_sim['date']==d,'monthly_expenditure'].values[0] for d in spike_dates]
-    fig.add_trace(go.Scatter(x=spike_dates, y=spike_vals, mode='markers+text', name='December spikes', text=[f"{v:,.0f}" for v in spike_vals], textposition="top center"))
 
-fig.update_layout(title=f'Age {start_age} → {end_age} : Monthly Expenditure, Income, Cumulative Corpus (v5)', yaxis_title='INR', hovermode='x unified')
-st.plotly_chart(fig, use_container_width=True)
 
-st.subheader("December itemized calendar view (INR)")
-if dec_df.empty:
-    st.write("No December lump-sum expenditures detected in simulation range.")
-else:
-    st.write("Itemized December expenditures (each row = a payment in December)")
-    st.dataframe(dec_df)
-    st.write("December totals by year")
-    st.dataframe(dec_summary)
 
-    # Provide download buttons for CSVs
-    csv_buf = io.StringIO()
-    df_sim.to_csv(csv_buf, index=False)
-    st.download_button("Download full monthly simulation CSV", data=csv_buf.getvalue(), file_name="simulation_results_v5.csv", mime="text/csv")
 
-    csv_buf2 = io.StringIO()
-    dec_df.to_csv(csv_buf2, index=False)
-    st.download_button("Download itemized December spikes CSV", data=csv_buf2.getvalue(), file_name="december_spikes_v5.csv", mime="text/csv")
 
-    csv_buf3 = io.StringIO()
-    dec_summary.to_csv(csv_buf3, index=False)
-    st.download_button("Download December totals summary CSV", data=csv_buf3.getvalue(), file_name="december_spikes_summary_v5.csv", mime="text/csv")
 
-st.success("v5 simulation complete. Graphs are shown above and downloadable CSVs are available.")
+
